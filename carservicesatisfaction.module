@@ -1,0 +1,87 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function carservicesatisfaction_menu() {
+  $items['city/autocomplete'] = array(
+    'title' => 'City autocomplete',
+    'page callback' => 'city_autocomplete',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Menu callback; Retrieve a JSON object containing autocomplete suggestions for existing users.
+ */
+function city_autocomplete($string = '') {
+  $matches = array();
+  if ($string) {
+    $result = db_select('zipcodes')->fields('zipcodes', array('city'))->condition('city', db_like($string) . '%', 'LIKE')->range(0, 10)->execute();
+    foreach ($result as $zipcode) {
+      $matches[$zipcode->city] = check_plain($zipcode->city);
+    }
+  }
+
+  drupal_json_output($matches);
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function carservicesatisfaction_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'carservicesatisfaction') .'/views',
+  );
+}
+
+function carservicesatisfaction_location_element_alter(&$element) {
+  $element['city']['#autocomplete_path'] = 'city/autocomplete';
+  $element['province']['#title'] = 'State';
+  $element['#element_validate'][] = 'carservicesatisfaction_location_validate';
+}
+
+function carservicesatisfaction_location_validate($element, &$form_state, $form) {
+
+  $zipcode = $element['postal_code']['#value'];
+
+  if ('' == $zipcode) {
+    return;
+  }
+
+  $city = $element['city']['#value'];
+  $state = $element['province']['#value'];
+
+  $result = db_select('zipcodes')
+    ->fields('zipcodes', array('zip','state','city'))
+    ->condition('zipcodes.zip',$zipcode)
+    ->execute();
+
+  $suggestions = array();
+
+  if($result->rowCount() == 0) {
+    form_error($element, t('Invalid zipcode'));
+  }
+  else {
+    $provinces = location_get_provinces();
+
+    foreach ($result as $location) {
+      $full_state = $provinces[$location->state];
+      if ($location->city == $city && ($full_state == $state || $location->state == $state)) {
+        return;
+      }
+
+      $suggestions[] = $location->city . ', ' . $location->zip . ', ' . $full_state;
+    }
+    $args = array(
+      '@suggestions' => implode(' or ', $suggestions),
+    );
+    form_error($element, t('Invalid address. Did you mean @suggestions?', $args));
+
+  }
+
+}

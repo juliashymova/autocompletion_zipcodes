@@ -1,0 +1,10 @@
+name = Carservicesatisfaction
+description = Autocompletion for the City field.
+package = "Custom"
+core = 7.x
+
+
+files[] = carservicesatisfaction.module
+files[] = views/css_views_handler_filter_string.inc
+
+
